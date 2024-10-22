@@ -58,7 +58,6 @@ class Product implements Serializable {
 public class UDPObject {
 
     public static void main(String[] args) {
-
         String address = "203.162.10.109";
         int port = 2209;
         String studentCode = "B21DCCN181";
@@ -79,45 +78,32 @@ public class UDPObject {
             DatagramPacket receivePacket = new DatagramPacket(receiveBuffer, receiveBuffer.length);
             socket.receive(receivePacket);
 
-            // Giải mã dữ liệu nhận được
-            ByteArrayInputStream byteStream = new ByteArrayInputStream(receiveBuffer);
-            DataInputStream dataStream = new DataInputStream(byteStream);
-
-            // Đọc requestId (8 byte đầu)
-            byte[] requestIdBytes = new byte[8];
-            dataStream.readFully(requestIdBytes);
-            String requestId = new String(requestIdBytes);
-
             // Đọc đối tượng Product từ dữ liệu nhận được
-            ObjectInputStream objectStream = new ObjectInputStream(byteStream);
-            Product receivedProduct = (Product) objectStream.readObject();
+            try (ObjectInputStream objectStream = new ObjectInputStream(new ByteArrayInputStream(receiveBuffer))) {
+                Product receivedProduct = (Product) objectStream.readObject();
+                System.out.println("Received Product: " + receivedProduct);
 
-            // In đối tượng Product nhận được từ server
-            System.out.println("Received Product: " + receivedProduct);
+                // Sửa đổi thông tin sản phẩm
+                String[] nameParts = receivedProduct.getName().split(" ");
+                String correctedName = nameParts[nameParts.length - 1] + " " + nameParts[1] + " " + nameParts[0];
+                receivedProduct.setName(correctedName);
 
-            // Sửa đổi thông tin sản phẩm
-            String[] nameParts = receivedProduct.getName().split(" ");
-            String correctedName = nameParts[nameParts.length - 1] + " " + nameParts[1] + " " + nameParts[0];
-            receivedProduct.setName(correctedName);
+                // Đảo ngược số lượng
+                int reversedQuantity = reverseNumber(receivedProduct.getQuantity());
+                receivedProduct.setQuantity(reversedQuantity);
 
-            // Đảo ngược số lượng
-            int reversedQuantity = reverseNumber(receivedProduct.getQuantity());
-            receivedProduct.setQuantity(reversedQuantity);
+                // Tuần tự hóa đối tượng đã sửa đổi và gửi lại lên server
+                try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                     ObjectOutputStream oos = new ObjectOutputStream(bos)) {
 
-            // Tuần tự hóa đối tượng đã sửa đổi và gửi lại lên server
-            ByteArrayOutputStream bos = new ByteArrayOutputStream();
-            ObjectOutputStream oos = new ObjectOutputStream(bos);
+                    oos.writeObject(receivedProduct);
 
-            // Ghi requestId trước (8 byte đầu)
-            oos.write(requestIdBytes);
-
-            // Ghi đối tượng Product đã sửa đổi
-            oos.writeObject(receivedProduct);
-
-            // Gửi lại thông điệp chứa requestId và đối tượng đã sửa
-            byte[] sendBuffer = bos.toByteArray();
-            DatagramPacket correctedPacket = new DatagramPacket(sendBuffer, sendBuffer.length, inetAddress, port);
-            socket.send(correctedPacket);
+                    // Gửi lại thông điệp chứa đối tượng đã sửa
+                    byte[] sendBuffer = bos.toByteArray();
+                    DatagramPacket correctedPacket = new DatagramPacket(sendBuffer, sendBuffer.length, inetAddress, port);
+                    socket.send(correctedPacket);
+                }
+            }
 
             // Đóng socket
             socket.close();
@@ -137,3 +123,4 @@ public class UDPObject {
         return reversed;
     }
 }
+
